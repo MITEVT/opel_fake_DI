@@ -27,6 +27,13 @@ static uint32_t last_message;
 static uint8_t DI_CTRL;
 static uint32_t last_update;
 
+static uint8_t motor_state;
+static int16_t motor_current;
+static int16_t motor_speed;
+static uint16_t HV_Voltage;
+static int16_t motor_torque;
+static bool motor_shutdown_ok;
+
 // -----------------------------------------
 // Helper Functions
 
@@ -37,6 +44,57 @@ static uint32_t last_update;
 void _delay(uint32_t ms) {
 	uint32_t curTicks = msTicks;
 	while ((msTicks - curTicks) < ms);
+}
+
+inline static void displayData(void){
+	Board_UART_Print("[Motor current:");
+	Board_UART_PrintNum(motor_current,10,false);
+	Board_UART_Println("]");
+	Board_UART_Print("[Motor Speed:");
+	Board_UART_PrintNum(motor_speed,10,false);
+	Board_UART_Println("]");
+	Board_UART_Print("[High Voltage, Voltage:");
+	Board_UART_PrintNum(HV_Voltage,10,false);
+	Board_UART_Println("]");
+	Board_UART_Print("[Motor Torque:");
+	Board_UART_PrintNum(motor_torque,10,false);
+	Board_UART_Println("]");
+	Board_UART_Print("[Motor Shutdown OK:");
+	if(motor_shutdown_ok){
+		Board_UART_Println("True]");
+	}
+	else{
+		Board_UART_Println("False]");
+	}
+	Board_UART_Print("[Motor State:");
+	switch(motor_state){
+		case (0):
+			Board_UART_Println("Powerup]");
+			break;
+		case (1):
+			Board_UART_Println("Disabled]");
+			break;
+		case (3):
+			Board_UART_Println("Enabled]");
+			break;
+		case (2):
+			Board_UART_Println("Standby]");
+			break;
+		case (4):
+			Board_UART_Println("Powerdown]");
+			break;
+		case (5):
+			Board_UART_Println("Fault]");
+			break;
+		case (6):
+			Board_UART_Println("Critical Fault]");
+			break;
+		case (7):
+			Board_UART_Println("Off]");
+			break;
+		default:
+			Board_UART_Println("Unknown]");
+	}
 }
 
 inline static void sendDIMessage(void){
@@ -57,7 +115,7 @@ inline static void sendDIMessage(void){
 	}
 	if((DI_CTRL&DRIVE_STATUS_BITS)==DRIVE_STATUS_PARKED){
 		msg_obj.data_16[1] = 0;
-	}
+	}	
 	else if((DI_CTRL&DRIVE_STATUS_BITS)==DRIVE_STATUS_FORWARD){
 		msg_obj.data_16[1] = 0x00F0;
 	}
@@ -170,9 +228,9 @@ int main(void)
 		if(last_message<msTicks-100){
 			last_message = msTicks;
 			sendDIMessage();
+			displayData();
 		}
 		if(last_update<msTicks-10){
-			Board_UART_PrintNum(DI_CTRL,2,true);
 			last_update = msTicks;
 			Board_State_Contactor_Update(&DI_CTRL);	
 			if((DI_CTRL & CONTACTOR_PRECHARGE_CTRL_BIT)==0){
@@ -191,21 +249,22 @@ int main(void)
 		if (!RingBuffer_IsEmpty(&can_rx_buffer)) {
 			CCAN_MSG_OBJ_T temp_msg;
 			RingBuffer_Pop(&can_rx_buffer, &temp_msg);
-			Board_UART_Print("Received Message ID: 0x");
-			itoa(temp_msg.mode_id, str, 16);
-			Board_UART_Println(str);
-
-			Board_UART_Print("\t0x");
-			itoa(temp_msg.data_16[0], str, 16);
-			Board_UART_Println(str);
-
+			if(temp_msg.mode_id == 0x705){
+				motor_shutdown_ok = (temp_msg.data[0] & 0x80 > 0);
+				motor_state = ((temp_msg.data[0] >>4) & 7);
+				motor_current = ((temp_msg.data[1] << 8) & 0xFF00) | (temp_msg.data[2]);
+				motor_speed = ((temp_msg.data[3] << 4) & 0xFF0) | ((temp_msg.data[4] >> 4) & 0xF);
+				HV_Voltage = ((temp_msg.data[4] << 8) & 0xF00) | (temp_msg.data[5]);
+				motor_torque = ((temp_msg.data[6]<<8) & 0xFF00) | temp_msg.data[7];
+			}
 		}	
 
 		if (can_error_flag) {
 			can_error_flag = false;
-			Board_UART_Print("CAN Error: 0b");
+			Board_UART_Print("[CAN Error: 0b");
 			itoa(can_error_info, str, 2);
-			Board_UART_Println(str);
+			Board_UART_Print(str);
+			Board_UART_Println("]");
 		}
 
 		uint8_t count;
