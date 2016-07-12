@@ -53,7 +53,7 @@ inline static void displayData(void){
 	Board_UART_Print("[Motor Speed:");
 	Board_UART_PrintNum(motor_speed,10,false);
 	Board_UART_Println("]");
-	Board_UART_Print("[High Voltage, Voltage:");
+	Board_UART_Print("[High Voltage:");
 	Board_UART_PrintNum(HV_Voltage,10,false);
 	Board_UART_Println("]");
 	Board_UART_Print("[Motor Torque:");
