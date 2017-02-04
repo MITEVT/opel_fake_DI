@@ -31,6 +31,10 @@ void Board_LEDs_Init(void) {
 	Chip_GPIO_WriteDirBit(LPC_GPIO,2,10, true);
 }
 
+void LED_On(int port,int pin) {
+	Chip_GPIO_SetPinState(LPC_GPIO,port,pin,true);
+}
+
 void Board_UART_Init(uint32_t baudrate) {
 	Chip_IOCON_PinMuxSet(LPC_IOCON, UART_RX_IOCON, (IOCON_FUNC1 | IOCON_MODE_INACT));	// Rx pin
 	Chip_IOCON_PinMuxSet(LPC_IOCON, UART_TX_IOCON, (IOCON_FUNC1 | IOCON_MODE_INACT));	// Tx Pin

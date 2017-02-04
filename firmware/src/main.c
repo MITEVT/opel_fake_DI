@@ -168,8 +168,8 @@ int main(void)
 	//---------------
 	// Initialize GPIO and LED as output
 	Board_LEDs_Init();
-	Chip_GPIO_SetPinState(LPC_GPIO,2,10,true);
-	Board_Contactors_Init();
+	LED_On(2,10);
+//	Board_Contactors_Init();
 
 	//---------------
 	// Initialize CAN  and CAN Ring Buffer
@@ -186,13 +186,16 @@ int main(void)
 	last_update = msTicks;
 	
 	while (1) {
-		if (last_message<msTicks-100) {
+		if (last_message<(msTicks-10000)) {
+			last_message = msTicks;
 			Board_UART_Println("Sending CAN with ID: 0x505");
 			msg_obj.msgobj = 2;
 			msg_obj.mode_id = 0x505;
 			msg_obj.dlc = 2;
-			msg_obj.data[0] = 0x40;
-			msg_obj.data[1] = 0x00;
+			msg_obj.data_16[0] = 0x40;
+			msg_obj.data_16[1] = 0x00;
+			Board_UART_PrintNum(msg_obj.data_16[0],16,true);
+			Board_UART_PrintNum(msg_obj.data_16[1],16,true);
 			LPC_CCAN_API->can_transmit(&msg_obj);		
 		}
 /*		if(last_message<msTicks-100){
