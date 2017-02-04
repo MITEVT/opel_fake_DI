@@ -146,42 +146,6 @@ inline static void sendDIMessage(void){
 }	
 
 // -------------------------------------------------------------
-// CAN Driver Callback Functions
-
-/*	CAN receive callback */
-/*	Function is executed by the Callback handler after
-    a CAN message has been received */
-void CAN_rx(uint8_t msg_obj_num) {
-	// LED_On();
-	/* Determine which CAN message has been received */
-	msg_obj.msgobj = msg_obj_num;
-	/* Now load up the msg_obj structure with the CAN message */
-	LPC_CCAN_API->can_receive(&msg_obj);
-	if (msg_obj_num == 1) {
-		RingBuffer_Insert(&can_rx_buffer, &msg_obj);
-	}
-}
-
-/*	CAN transmit callback */
-/*	Function is executed by the Callback handler after
-    a CAN message has been transmitted */
-void CAN_tx(uint8_t msg_obj_num) {
-	msg_obj_num = msg_obj_num;
-}
-
-/*	CAN error callback */
-/*	Function is executed by the Callback handler after
-    an error has occurred on the CAN bus */
-void CAN_error(uint32_t error_info) {
-	can_error_info = error_info;
-	can_error_flag = true;
-}
-
-// -------------------------------------------------------------
-// Interrupt Service Routines
-
-
-// -------------------------------------------------------------
 // Main Program Loop
 
 int main(void)
@@ -204,16 +168,13 @@ int main(void)
 	//---------------
 	// Initialize GPIO and LED as output
 	Board_LEDs_Init();
-	Board_LED_On(LED0);
+	Chip_GPIO_SetPinState(LPC_GPIO,2,10,true);
 	Board_Contactors_Init();
 
 	//---------------
 	// Initialize CAN  and CAN Ring Buffer
 
-	RingBuffer_Init(&can_rx_buffer, _rx_buffer, sizeof(CCAN_MSG_OBJ_T), BUFFER_SIZE);
-	RingBuffer_Flush(&can_rx_buffer);
-
-	Board_CAN_Init(CCAN_BAUD_RATE, CAN_rx, CAN_tx, CAN_error);
+	CAN_Init(CCAN_BAUD_RATE);
 	msg_obj.msgobj = 1;
 	msg_obj.mode_id = 0x000;
 	msg_obj.mask = 0x000;
@@ -225,7 +186,16 @@ int main(void)
 	last_update = msTicks;
 	
 	while (1) {
-		if(last_message<msTicks-100){
+		if (last_message<msTicks-100) {
+			Board_UART_Println("Sending CAN with ID: 0x505");
+			msg_obj.msgobj = 2;
+			msg_obj.mode_id = 0x505;
+			msg_obj.dlc = 2;
+			msg_obj.data[0] = 0x40;
+			msg_obj.data[1] = 0x00;
+			LPC_CCAN_API->can_transmit(&msg_obj);		
+		}
+/*		if(last_message<msTicks-100){
 			last_message = msTicks;
 			sendDIMessage();
 			displayData();
@@ -245,25 +215,28 @@ int main(void)
 			else{
 				Board_Contactor_Controls_Low_Open();
 			}
-		}
+		}*/
 		if (!RingBuffer_IsEmpty(&can_rx_buffer)) {
 			CCAN_MSG_OBJ_T temp_msg;
-			RingBuffer_Pop(&can_rx_buffer, &temp_msg);
-			if(temp_msg.mode_id == 0x705){
+			CAN_Receive(temp_msg);
+			Board_UART_Print("Received Message ID: 0x");
+			Board_UART_PrintNum(temp_msg.mode_id,16,true);
+			Board_UART_PrintNum(temp_msg.data[0],16,true);
+			Board_UART_PrintNum(temp_msg.data[1],16,true);	
+/*			if(temp_msg.mode_id == 0x705){
 				motor_shutdown_ok = (temp_msg.data[0] & 0x80 > 0);
 				motor_state = ((temp_msg.data[0] >>4) & 7);
 				motor_current = ((temp_msg.data[1] << 8) & 0xFF00) | (temp_msg.data[2]);
 				motor_speed = ((temp_msg.data[3] << 4) & 0xFF0) | ((temp_msg.data[4] >> 4) & 0xF);
 				HV_Voltage = ((temp_msg.data[4] << 8) & 0xF00) | (temp_msg.data[5]);
 				motor_torque = ((temp_msg.data[6]<<8) & 0xFF00) | temp_msg.data[7];
-			}
+			}*/
 		}	
 
 		if (can_error_flag) {
 			can_error_flag = false;
 			Board_UART_Print("[CAN Error: 0b");
-			itoa(can_error_info, str, 2);
-			Board_UART_Print(str);
+			Board_UART_PrintNum(can_error_info,2,false);
 			Board_UART_Println("]");
 		}
 
